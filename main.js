@@ -3,40 +3,43 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Assets
 const rocket = new Image();
 rocket.src = 'assets/rocket.png';
 
 const planet = new Image();
 planet.src = 'assets/planet.png';
 
-// World state
-let rocketPos = { x: 0, y: 0, z: 200 }; // z is distance from planet center
-let angle = 0; // rotation around planet
+let rocketPos = { x: 0, y: 0, z: 300 };
+let angle = 0;
 
-// Input
-let keys = {};
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
+let controls = { left: false, right: false, zoomIn: false, zoomOut: false };
 
-// Main loop
+document.getElementById("left").ontouchstart = () => controls.left = true;
+document.getElementById("left").ontouchend = () => controls.left = false;
+
+document.getElementById("right").ontouchstart = () => controls.right = true;
+document.getElementById("right").ontouchend = () => controls.right = false;
+
+document.getElementById("zoomIn").ontouchstart = () => controls.zoomIn = true;
+document.getElementById("zoomIn").ontouchend = () => controls.zoomIn = false;
+
+document.getElementById("zoomOut").ontouchstart = () => controls.zoomOut = true;
+document.getElementById("zoomOut").ontouchend = () => controls.zoomOut = false;
+
 function loop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // === Update ===
-  if (keys["ArrowLeft"]) angle -= 0.02;
-  if (keys["ArrowRight"]) angle += 0.02;
-  if (keys["ArrowUp"]) rocketPos.z -= 2;
-  if (keys["ArrowDown"]) rocketPos.z += 2;
-
-  // Clamp zoom
+  // Update from controls
+  if (controls.left) angle -= 0.02;
+  if (controls.right) angle += 0.02;
+  if (controls.zoomIn) rocketPos.z -= 2;
+  if (controls.zoomOut) rocketPos.z += 2;
   rocketPos.z = Math.max(80, Math.min(600, rocketPos.z));
 
-  // === Draw Planet ===
+  // Smaller planet (scales down 2x)
   const screenCenter = { x: canvas.width / 2, y: canvas.height / 2 };
-  const planetRadius = Math.min(canvas.width, canvas.height) / 3;
-
-  const scale = planetRadius / rocketPos.z; // zoom effect
+  const baseRadius = Math.min(canvas.width, canvas.height) / 4;
+  const scale = baseRadius / rocketPos.z;
   const visibleRadius = planet.width * scale;
 
   ctx.save();
@@ -50,7 +53,6 @@ function loop() {
   );
   ctx.restore();
 
-  // === Draw Rocket ===
   const orbitRadius = visibleRadius / 2 + 30;
   const rocketX = screenCenter.x + Math.cos(angle) * orbitRadius;
   const rocketY = screenCenter.y + Math.sin(angle) * orbitRadius;
