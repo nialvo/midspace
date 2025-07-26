@@ -9,57 +9,92 @@ rocket.src = 'assets/rocket.png';
 const planet = new Image();
 planet.src = 'assets/planet.png';
 
-let rocketPos = { x: 0, y: 0, z: 300 };
-let angle = 0;
+let rocketState = {
+  pos: { x: 200, y: 0, z: 300 },
+  vel: { x: 0, y: 0, z: 0 },
+  angle: 0,
+  targetAngle: 0
+};
 
-let controls = { left: false, right: false, zoomIn: false, zoomOut: false };
+let joystick = { x: 0, y: 0 };
+let thrust = 0;
 
-document.getElementById("left").ontouchstart = () => controls.left = true;
-document.getElementById("left").ontouchend = () => controls.left = false;
+document.getElementById("thrust").addEventListener("input", (e) => {
+  thrust = parseFloat(e.target.value);
+});
 
-document.getElementById("right").ontouchstart = () => controls.right = true;
-document.getElementById("right").ontouchend = () => controls.right = false;
+let joyCenter = { x: 0, y: 0 };
+let touching = false;
 
-document.getElementById("zoomIn").ontouchstart = () => controls.zoomIn = true;
-document.getElementById("zoomIn").ontouchend = () => controls.zoomIn = false;
+const joystickEl = document.getElementById("joystick");
+joystickEl.addEventListener("touchstart", (e) => {
+  touching = true;
+  joyCenter = getTouchPos(e);
+});
+joystickEl.addEventListener("touchmove", (e) => {
+  if (touching) {
+    const pos = getTouchPos(e);
+    joystick.x = (pos.x - joyCenter.x) / 40;
+    joystick.y = (pos.y - joyCenter.y) / 40;
+  }
+});
+joystickEl.addEventListener("touchend", () => {
+  touching = false;
+  joystick.x = 0;
+  joystick.y = 0;
+});
 
-document.getElementById("zoomOut").ontouchstart = () => controls.zoomOut = true;
-document.getElementById("zoomOut").ontouchend = () => controls.zoomOut = false;
+function getTouchPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const touch = e.touches[0];
+  return {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  };
+}
 
 function loop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Update from controls
-  if (controls.left) angle -= 0.02;
-  if (controls.right) angle += 0.02;
-  if (controls.zoomIn) rocketPos.z -= 2;
-  if (controls.zoomOut) rocketPos.z += 2;
-  rocketPos.z = Math.max(80, Math.min(600, rocketPos.z));
+  // === Movement Logic ===
+  let mag = Math.hypot(joystick.x, joystick.y);
+  if (mag > 1) mag = 1;
 
-  // Smaller planet (scales down 2x)
+  let dir = Math.atan2(joystick.y, joystick.x);
+  rocketState.targetAngle = dir;
+
+  // Smooth rotate toward target
+  let da = rocketState.targetAngle - rocketState.angle;
+  if (da > Math.PI) da -= 2 * Math.PI;
+  if (da < -Math.PI) da += 2 * Math.PI;
+  rocketState.angle += da * 0.1;
+
+  // Apply thrust
+  rocketState.vel.x += Math.cos(rocketState.angle) * thrust * 0.5;
+  rocketState.vel.y += Math.sin(rocketState.angle) * thrust * 0.5;
+  rocketState.pos.x += rocketState.vel.x;
+  rocketState.pos.y += rocketState.vel.y;
+
+  // === Rendering ===
   const screenCenter = { x: canvas.width / 2, y: canvas.height / 2 };
-  const baseRadius = Math.min(canvas.width, canvas.height) / 4;
-  const scale = baseRadius / rocketPos.z;
-  const visibleRadius = planet.width * scale;
+
+  // Planet zoom logic
+  const distance = Math.hypot(rocketState.pos.x, rocketState.pos.y);
+  const scale = 200 / Math.max(distance, 100); // perspective zoom
+  const planetSize = 300 * scale;
 
   ctx.save();
   ctx.translate(screenCenter.x, screenCenter.y);
-  ctx.drawImage(
-    planet,
-    -visibleRadius / 2,
-    -visibleRadius / 2,
-    visibleRadius,
-    visibleRadius
-  );
+  ctx.drawImage(planet, -planetSize / 2, -planetSize / 2, planetSize, planetSize);
   ctx.restore();
 
-  const orbitRadius = visibleRadius / 2 + 30;
-  const rocketX = screenCenter.x + Math.cos(angle) * orbitRadius;
-  const rocketY = screenCenter.y + Math.sin(angle) * orbitRadius;
-
+  // Draw rocket
   ctx.save();
-  ctx.translate(rocketX, rocketY);
-  ctx.rotate(angle + Math.PI / 2);
+  ctx.translate(
+    screenCenter.x + rocketState.pos.x * scale,
+    screenCenter.y + rocketState.pos.y * scale
+  );
+  ctx.rotate(rocketState.angle + Math.PI / 2);
   ctx.drawImage(rocket, -16, -16, 32, 32);
   ctx.restore();
 

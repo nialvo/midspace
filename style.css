@@ -3,29 +3,35 @@ body, html {
   padding: 0;
   overflow: hidden;
   background: black;
+  touch-action: none;
 }
+
 canvas {
   display: block;
   width: 100vw;
   height: 100vh;
 }
-.controls {
+
+#joystick {
   position: absolute;
+  left: 20px;
   bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 20px;
-}
-button {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid white;
-  color: white;
-  font-size: 24px;
-  padding: 10px 20px;
-  border-radius: 8px;
-  -webkit-user-select: none;
+  width: 120px;
+  height: 120px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 50%;
+  touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
   -webkit-touch-callout: none;
-  touch-action: manipulation;
+}
+
+#thrust {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  height: 120px;
+  writing-mode: bt-lr;
+  transform: rotate(270deg);
+  touch-action: none;
 }
