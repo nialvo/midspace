@@ -12,21 +12,20 @@ planet.src = 'assets/planet.png';
 let rocketState = {
   pos: { x: 200, y: 0, z: 300 },
   vel: { x: 0, y: 0, z: 0 },
-  angle: 0,
-  targetAngle: 0
+  angle: 0
 };
 
-let joystick = { x: 0, y: 0 };
-let thrust = 0;
+let joystick = { angle: 0, power: 0 }; // power = thrust
+let altitudeInput = 0;
 
-document.getElementById("thrust").addEventListener("input", (e) => {
-  thrust = parseFloat(e.target.value);
+document.getElementById("altitude").addEventListener("input", (e) => {
+  altitudeInput = parseFloat(e.target.value);
 });
 
 let joyCenter = { x: 0, y: 0 };
 let touching = false;
-
 const joystickEl = document.getElementById("joystick");
+
 joystickEl.addEventListener("touchstart", (e) => {
   touching = true;
   joyCenter = getTouchPos(e);
@@ -34,14 +33,15 @@ joystickEl.addEventListener("touchstart", (e) => {
 joystickEl.addEventListener("touchmove", (e) => {
   if (touching) {
     const pos = getTouchPos(e);
-    joystick.x = (pos.x - joyCenter.x) / 40;
-    joystick.y = (pos.y - joyCenter.y) / 40;
+    const dx = pos.x - joyCenter.x;
+    const dy = pos.y - joyCenter.y;
+    joystick.angle = Math.atan2(dy, dx);
+    joystick.power = Math.min(1, Math.hypot(dx, dy) / 50); // 0–1 range
   }
 });
 joystickEl.addEventListener("touchend", () => {
   touching = false;
-  joystick.x = 0;
-  joystick.y = 0;
+  joystick.power = 0;
 });
 
 function getTouchPos(e) {
@@ -56,32 +56,37 @@ function getTouchPos(e) {
 function loop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // === Movement Logic ===
-  let mag = Math.hypot(joystick.x, joystick.y);
-  if (mag > 1) mag = 1;
-
-  let dir = Math.atan2(joystick.y, joystick.x);
-  rocketState.targetAngle = dir;
-
-  // Smooth rotate toward target
-  let da = rocketState.targetAngle - rocketState.angle;
+  // === Movement & Physics ===
+  // Smooth rotate towards joystick angle
+  let da = joystick.angle - rocketState.angle;
   if (da > Math.PI) da -= 2 * Math.PI;
   if (da < -Math.PI) da += 2 * Math.PI;
   rocketState.angle += da * 0.1;
 
-  // Apply thrust
-  rocketState.vel.x += Math.cos(rocketState.angle) * thrust * 0.5;
-  rocketState.vel.y += Math.sin(rocketState.angle) * thrust * 0.5;
+  // Apply thrust (from joystick power)
+  rocketState.vel.x += Math.cos(rocketState.angle) * joystick.power * 0.2;
+  rocketState.vel.y += Math.sin(rocketState.angle) * joystick.power * 0.2;
+
+  // Apply drag (space "friction" for control)
+  rocketState.vel.x *= 0.99;
+  rocketState.vel.y *= 0.99;
+
+  // Update position
   rocketState.pos.x += rocketState.vel.x;
   rocketState.pos.y += rocketState.vel.y;
+
+  // Altitude change proportional to speed
+  const speed = Math.hypot(rocketState.vel.x, rocketState.vel.y);
+  rocketState.pos.z += altitudeInput * speed * 0.5;
+  rocketState.pos.z = Math.max(80, Math.min(600, rocketState.pos.z));
 
   // === Rendering ===
   const screenCenter = { x: canvas.width / 2, y: canvas.height / 2 };
 
   // Planet zoom logic
   const distance = Math.hypot(rocketState.pos.x, rocketState.pos.y);
-  const scale = 200 / Math.max(distance, 100); // perspective zoom
-  const planetSize = 300 * scale;
+  const scale = 200 / Math.max(distance, 100);
+  const planetSize = 200 * scale; // smaller planet
 
   ctx.save();
   ctx.translate(screenCenter.x, screenCenter.y);

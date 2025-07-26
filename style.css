@@ -26,7 +26,7 @@ canvas {
   -webkit-touch-callout: none;
 }
 
-#thrust {
+#altitude {
   position: absolute;
   right: 20px;
   bottom: 20px;
