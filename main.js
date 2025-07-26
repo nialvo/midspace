@@ -84,7 +84,7 @@ function loop() {
   const screenCenter = { x: canvas.width / 2, y: canvas.height / 2 };
 
   // Planet zoom logic
-  const distance = Math.hypot(rocketState.pos.x, rocketState.pos.y);
+  const distance = rocketState.pos.z
   const scale = 200 / Math.max(distance, 100);
   const planetSize = 200 * scale; // smaller planet
 
@@ -94,14 +94,27 @@ function loop() {
   ctx.restore();
 
   // Draw rocket
-  ctx.save();
-  ctx.translate(
-    screenCenter.x + rocketState.pos.x * scale,
-    screenCenter.y + rocketState.pos.y * scale
-  );
-  ctx.rotate(rocketState.angle + Math.PI / 2);
-  ctx.drawImage(rocket, -16, -16, 32, 32);
-  ctx.restore();
+
+  // Calculate squash/stretch based on altitudeInput
+let stretch = 1 + altitudeInput * 0.5;
+stretch = Math.max(0.5, Math.min(1.5, stretch)); // Clamp to avoid extreme distortion
+
+ctx.save();
+ctx.translate(
+  screenCenter.x + rocketState.pos.x * scale,
+  screenCenter.y + rocketState.pos.y * scale
+);
+ctx.rotate(rocketState.angle + Math.PI / 2);
+ctx.scale(1, stretch); // Stretch only in Y direction
+ctx.drawImage(rocket, -16, -16, 32, 32);
+ctx.restore();
+
+ctx.fillStyle = 'white';
+ctx.font = '16px sans-serif';
+
+ctx.fillText(`Pos: x=${rocketState.pos.x.toFixed(1)}, y=${rocketState.pos.y.toFixed(1)}, z=${rocketState.pos.z.toFixed(1)}`, 10, 20);
+ctx.fillText(`Vel: x=${rocketState.vel.x.toFixed(2)}, y=${rocketState.vel.y.toFixed(2)}`, 10, 40);
+ctx.fillText(`Speed: ${speed.toFixed(2)}`, 10, 60);
 
   requestAnimationFrame(loop);
 }
