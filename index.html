@@ -2,15 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Solar Nav</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <canvas id="bg"></canvas>
+  
   <div id="hud">
-    <div id="joystick"></div>
+    <div id="left-joystick"></div>
+    <div id="right-joystick"></div>
   </div>
+
   <script src="https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
   <script src="main.js"></script>
