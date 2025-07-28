@@ -28,17 +28,17 @@ html, body {
 #left-joystick, #right-joystick {
   width: 150px;
   height: 150px;
-  pointer-events: auto; 
+  pointer-events: auto;
 }
 
 #left-joystick {
   position: absolute;
   bottom: 0;
-  left: 20px;
+  left: 0;
 }
 
 #right-joystick {
   position: absolute;
   bottom: 0;
-  right: 20px;
+  right: 0;
 }

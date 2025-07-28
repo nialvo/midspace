@@ -1,10 +1,10 @@
-// Scene setup
+// === SCENE SETUP ===
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
   70,
   window.innerWidth / window.innerHeight,
   0.1,
-  2000
+  5000
 );
 camera.position.z = 30;
 
@@ -15,35 +15,33 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 
-// Resize handler
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Lights
+// === LIGHT & TEXTURES ===
 const light = new THREE.PointLight(0xffffff, 2, 300);
 light.position.set(0, 0, 0);
 scene.add(light);
 
-// Textures
 const loader = new THREE.TextureLoader();
 const sunTexture = loader.load('assets/s0.jpeg');
 const planetTexture = loader.load('assets/p0.jpeg');
 
-// Sun
+// === SUN ===
 const sunGeo = new THREE.SphereGeometry(5, 32, 32);
 const sunMat = new THREE.MeshBasicMaterial({ map: sunTexture });
 const sun = new THREE.Mesh(sunGeo, sunMat);
 scene.add(sun);
 
-// Planets
+// === PLANETS ===
 const planets = [];
 const planetNames = ["Mercury","Venus","Earth","Mars","Jupiter","Saturn","Uranus","Neptune"];
 for (let i = 0; i < 8; i++) {
   const angle = (i / 8) * Math.PI * 2;
-  const dist = 30 + i * 4;
+  const dist = 30 + i * 8;
   const geometry = new THREE.SphereGeometry(1.2, 16, 16);
   const material = new THREE.MeshBasicMaterial({ map: planetTexture });
   const planet = new THREE.Mesh(geometry, material);
@@ -53,58 +51,128 @@ for (let i = 0; i < 8; i++) {
   planets.push(planet);
 }
 
-// Movement variables
-let move = { x: 0, y: 0, z: 0, roll: 0 };
+// === STARFIELD ===
+function createStarfield() {
+  const starGeometry = new THREE.BufferGeometry();
+  const starCount = 2000;
+  const starPositions = [];
 
-// Left joystick → pitch + yaw
+  for (let i = 0; i < starCount; i++) {
+    const theta = Math.random() * 2 * Math.PI;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const radius = 2000;
+    const x = radius * Math.sin(phi) * Math.cos(theta);
+    const y = radius * Math.sin(phi) * Math.sin(theta);
+    const z = radius * Math.cos(phi);
+    starPositions.push(x, y, z);
+  }
+
+  starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+  const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1 });
+  const stars = new THREE.Points(starGeometry, starMaterial);
+  scene.add(stars);
+}
+
+function createMilkyWayBand() {
+  const bandGeometry = new THREE.BufferGeometry();
+  const bandCount = 3000;
+  const bandPositions = [];
+
+  for (let i = 0; i < bandCount; i++) {
+    const theta = Math.random() * 2 * Math.PI;
+    // Restrict to ~±15° from equator
+    const phi = (Math.PI / 2) + (Math.random() - 0.5) * (Math.PI / 6);
+    const radius = 2000;
+    const x = radius * Math.sin(phi) * Math.cos(theta);
+    const y = radius * Math.sin(phi) * Math.sin(theta);
+    const z = radius * Math.cos(phi);
+    bandPositions.push(x, y, z);
+  }
+
+  bandGeometry.setAttribute('position', new THREE.Float32BufferAttribute(bandPositions, 3));
+  const bandMaterial = new THREE.PointsMaterial({ color: 0xbbccff, size: 1.5 });
+  const bandStars = new THREE.Points(bandGeometry, bandMaterial);
+  scene.add(bandStars);
+}
+
+createStarfield();
+createMilkyWayBand();
+
+// === MOVEMENT VARIABLES WITH FULL INERTIA ===
+let angularVelocity = new THREE.Vector3(0, 0, 0); // pitch, yaw, roll rates
+let angularTarget = new THREE.Vector3(0, 0, 0);
+let velocity = new THREE.Vector3(0, 0, 0);        // linear velocity
+let thrustTarget = 0;
+
+const angularAccel = 0.05;
+const angularDamping = 0.99;
+const thrustAccel = 0.01;
+const linearDamping = 0.999;
+
+// === LEFT JOYSTICK → pitch + yaw ===
 const leftJoystick = nipplejs.create({
   zone: document.getElementById('left-joystick'),
   mode: 'static',
-  position: { left: '50%', top: '50%' },
+  position: { left: '75px', bottom: '75px' },
   color: 'white'
 });
+
 leftJoystick.on('move', (evt, data) => {
   if (data.vector) {
-    move.x = data.vector.x * 0.05; // yaw
-    move.y = data.vector.y * -0.05; // pitch
+    angularTarget.y = -data.vector.x * 0.03; // yaw
+    angularTarget.x = data.vector.y * 0.03; // pitch
   }
 });
 leftJoystick.on('end', () => {
-  move.x = move.y = 0;
+  angularTarget.set(0, 0, 0);
 });
 
-// Right joystick → forward/back + roll
+// === RIGHT JOYSTICK → thrust + roll ===
 const rightJoystick = nipplejs.create({
   zone: document.getElementById('right-joystick'),
   mode: 'static',
-  position: { left: '50%', top: '50%' },
+  position: { right: '75px', bottom: '75px' },
   color: 'white'
 });
+
 rightJoystick.on('move', (evt, data) => {
   if (data.vector) {
-    move.z = data.vector.y * -0.2;  // forward/back
-    move.roll = data.vector.x * 0.03; // roll
+    thrustTarget = data.vector.y;             // thrust (hold = accel)
+    angularTarget.z = -data.vector.x * 0.03;   // roll
   }
 });
 rightJoystick.on('end', () => {
-  move.z = move.roll = 0;
+  thrustTarget = 0;
+  angularTarget.z = 0;
 });
 
-// Animate loop
+// === ANIMATION LOOP ===
 function animate() {
   requestAnimationFrame(animate);
 
-  // Apply pitch and yaw
-  camera.rotation.x += move.y;
-  camera.rotation.y += move.x;
+  // Smooth angular inertia
+  angularVelocity.lerp(angularTarget, angularAccel);
+  angularVelocity.multiplyScalar(angularDamping);
 
-  // Apply roll
-  camera.rotation.z += move.roll;
+  // Apply local rotation using quaternion
+  const q = new THREE.Quaternion();
+  q.setFromEuler(new THREE.Euler(
+    angularVelocity.x,
+    angularVelocity.y,
+    angularVelocity.z,
+    'XYZ'
+  ));
+  camera.quaternion.multiply(q);
 
-  // Move forward/backward in local space
-  const forward = new THREE.Vector3(0, 0, -1);
-  forward.applyEuler(camera.rotation).normalize();
-  camera.position.add(forward.multiplyScalar(move.z));
+  // Apply thrust as acceleration
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  velocity.addScaledVector(forward, thrustTarget * thrustAccel);
+
+  // Apply damping
+  velocity.multiplyScalar(linearDamping);
+
+  // Update position
+  camera.position.add(velocity);
 
   renderer.render(scene, camera);
 }
