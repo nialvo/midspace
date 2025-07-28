@@ -1,122 +1,121 @@
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 10000);
+camera.position.z = 50;
 
-const rocket = new Image();
-rocket.src = 'assets/rocket.png';
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg'), antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
 
-const planet = new Image();
-planet.src = 'assets/planet.png';
+// Lights
+const light = new THREE.PointLight(0xffffff, 2, 1000);
+light.position.set(0, 0, 0);
+scene.add(light);
 
-let rocketState = {
-  pos: { x: 200, y: 0, z: 300 },
-  vel: { x: 0, y: 0, z: 0 },
-  angle: 0
-};
+// Load textures
+const loader = new THREE.TextureLoader();
+const sunTexture = loader.load('assets/s0.jpeg');
+const planetTexture = loader.load('assets/p0.jpeg');
 
-let joystick = { angle: 0, power: 0 }; // power = thrust
-let altitudeInput = 0;
+// Sun
+const sunGeo = new THREE.SphereGeometry(5, 32, 32);
+const sunMat = new THREE.MeshBasicMaterial({ map: sunTexture });
+const sun = new THREE.Mesh(sunGeo, sunMat);
+scene.add(sun);
 
-document.getElementById("altitude").addEventListener("input", (e) => {
-  altitudeInput = parseFloat(e.target.value);
+// Planets
+const planets = [];
+const planetNames = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune"];
+for (let i = 0; i < 8; i++) {
+  const angle = (i / 8) * Math.PI * 2;
+  const dist = 150 + i * 50;
+  const geometry = new THREE.SphereGeometry(2, 16, 16);
+  const material = new THREE.MeshBasicMaterial({ map: planetTexture });
+  const planet = new THREE.Mesh(geometry, material);
+  planet.position.set(dist * Math.cos(angle), 0, dist * Math.sin(angle));
+  planet.userData = { name: planetNames[i] };
+  planets.push(planet);
+  scene.add(planet);
+}
+
+// Markers
+const markerGroup = new THREE.Group();
+scene.add(markerGroup);
+
+function updateMarkers() {
+  markerGroup.clear();
+
+  planets.forEach(planet => {
+    const pos = planet.position.clone();
+    const screenPos = pos.project(camera);
+
+    if (screenPos.z < 1 && screenPos.z > -1) {
+      const x = (screenPos.x + 1) / 2 * window.innerWidth;
+      const y = (-screenPos.y + 1) / 2 * window.innerHeight;
+
+      const div = document.createElement('div');
+      div.style.position = 'absolute';
+      div.style.left = `${x - 20}px`;
+      div.style.top = `${y - 20}px`;
+      div.style.color = 'white';
+      div.style.fontSize = '12px';
+      div.innerHTML = `🎯 ${planet.userData.name}`;
+      document.body.appendChild(div);
+
+      markerGroup.add({ dom: div });
+    } else {
+      const arrow = document.createElement('div');
+      arrow.style.position = 'absolute';
+      arrow.style.left = `${Math.max(0, Math.min(window.innerWidth - 30, (screenPos.x + 1) / 2 * window.innerWidth))}px`;
+      arrow.style.top = `${Math.max(0, Math.min(window.innerHeight - 30, (-screenPos.y + 1) / 2 * window.innerHeight))}px`;
+      arrow.style.color = 'red';
+      arrow.style.fontSize = '14px';
+      arrow.innerHTML = '➤';
+      document.body.appendChild(arrow);
+
+      markerGroup.add({ dom: arrow });
+    }
+  });
+}
+
+// Joystick
+let velocity = new THREE.Vector3();
+let direction = new THREE.Vector3();
+
+const joystick = nipplejs.create({
+  zone: document.getElementById('joystick'),
+  mode: 'static',
+  position: { left: '50%', top: '50%' },
+  color: 'white'
 });
 
-let joyCenter = { x: 0, y: 0 };
-let touching = false;
-const joystickEl = document.getElementById("joystick");
-
-joystickEl.addEventListener("touchstart", (e) => {
-  touching = true;
-  joyCenter = getTouchPos(e);
-});
-joystickEl.addEventListener("touchmove", (e) => {
-  if (touching) {
-    const pos = getTouchPos(e);
-    const dx = pos.x - joyCenter.x;
-    const dy = pos.y - joyCenter.y;
-    joystick.angle = Math.atan2(dy, dx);
-    joystick.power = Math.min(1, Math.hypot(dx, dy) / 50); // 0–1 range
+joystick.on('move', (evt, data) => {
+  if (data && data.vector) {
+    direction.set(data.vector.x, 0, -data.vector.y).normalize();
+    velocity.setLength(data.distance / 20);
   }
 });
-joystickEl.addEventListener("touchend", () => {
-  touching = false;
-  joystick.power = 0;
+
+joystick.on('end', () => {
+  velocity.set(0, 0, 0);
 });
 
-function getTouchPos(e) {
-  const rect = canvas.getBoundingClientRect();
-  const touch = e.touches[0];
-  return {
-    x: touch.clientX - rect.left,
-    y: touch.clientY - rect.top
-  };
+// Animation loop
+function animate() {
+  requestAnimationFrame(animate);
+
+  camera.position.addScaledVector(direction, velocity.length());
+  camera.lookAt(sun.position);
+
+  updateMarkers();
+
+  renderer.render(scene, camera);
 }
 
-function loop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+animate();
 
-  // === Movement & Physics ===
-  // Smooth rotate towards joystick angle
-  let da = joystick.angle - rocketState.angle;
-  if (da > Math.PI) da -= 2 * Math.PI;
-  if (da < -Math.PI) da += 2 * Math.PI;
-  rocketState.angle += da * 0.1;
-
-  // Apply thrust (from joystick power)
-  rocketState.vel.x += Math.cos(rocketState.angle) * joystick.power * 0.2;
-  rocketState.vel.y += Math.sin(rocketState.angle) * joystick.power * 0.2;
-
-  // Apply drag (space "friction" for control)
-  rocketState.vel.x *= 0.99;
-  rocketState.vel.y *= 0.99;
-
-  // Update position
-  rocketState.pos.x += rocketState.vel.x;
-  rocketState.pos.y += rocketState.vel.y;
-
-  // Altitude change proportional to speed
-  const speed = Math.hypot(rocketState.vel.x, rocketState.vel.y);
-  rocketState.pos.z += altitudeInput * speed * 0.5;
-  rocketState.pos.z = Math.max(80, Math.min(600, rocketState.pos.z));
-
-  // === Rendering ===
-  const screenCenter = { x: canvas.width / 2, y: canvas.height / 2 };
-
-  // Planet zoom logic
-  const distance = rocketState.pos.z
-  const scale = 200 / Math.max(distance, 100);
-  const planetSize = 200 * scale; // smaller planet
-
-  ctx.save();
-  ctx.translate(screenCenter.x, screenCenter.y);
-  ctx.drawImage(planet, -planetSize / 2, -planetSize / 2, planetSize, planetSize);
-  ctx.restore();
-
-  // Draw rocket
-
-  // Calculate squash/stretch based on altitudeInput
-let stretch = 1 + altitudeInput * 0.5;
-stretch = Math.max(0.5, Math.min(1.5, stretch)); // Clamp to avoid extreme distortion
-
-ctx.save();
-ctx.translate(
-  screenCenter.x + rocketState.pos.x * scale,
-  screenCenter.y + rocketState.pos.y * scale
-);
-ctx.rotate(rocketState.angle + Math.PI / 2);
-ctx.scale(1, stretch); // Stretch only in Y direction
-ctx.drawImage(rocket, -16, -16, 32, 32);
-ctx.restore();
-
-ctx.fillStyle = 'white';
-ctx.font = '16px sans-serif';
-
-ctx.fillText(`Pos: x=${rocketState.pos.x.toFixed(1)}, y=${rocketState.pos.y.toFixed(1)}, z=${rocketState.pos.z.toFixed(1)}`, 10, 20);
-ctx.fillText(`Vel: x=${rocketState.vel.x.toFixed(2)}, y=${rocketState.vel.y.toFixed(2)}`, 10, 40);
-ctx.fillText(`Speed: ${speed.toFixed(2)}`, 10, 60);
-
-  requestAnimationFrame(loop);
-}
-
-rocket.onload = () => planet.onload = () => loop();
+// Resize handler
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
